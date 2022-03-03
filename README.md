@@ -1,3 +1,10 @@
+# libuvc with uvc_mjpeg2bgr supported
+
+## Requirements
+The code is tested on Mac. It requires the following tools and libraries: libjpeg-turbo.
+
+***
+
 `libuvc` is a cross-platform library for USB video devices, built atop `libusb`.
 It enables fine-grained control over USB video devices exporting the standard USB Video Class
 (UVC) interface, enabling developers to write drivers for previously unsupported devices,
@@ -13,7 +20,7 @@ To build, you can just run these shell commands:
     cd libuvc
     mkdir build
     cd build
-    cmake ..
+    cmake -D CMAKE_INSTALL_PREFIX=/Users/luohanjie/Softwares/libuvc/install ..
     make && sudo make install
 
 and you're set! If you want to change the build configuration, you can edit `CMakeCache.txt`

@@ -24,6 +24,7 @@ endif()
 option(BUILD_EXAMPLE "Build example program" ON)
 option(BUILD_TEST "Build test program" OFF)
 option(ENABLE_UVC_DEBUGGING "Enable UVC debugging" OFF)
+option(USE_JPEG_TURBO "Use jpeg-turbo" ON)
 
 set(libuvc_DESCRIPTION "A cross-platform library for USB video devices")
 set(libuvc_URL "https://github.com/libuvc/libuvc")
@@ -41,15 +42,34 @@ set(SOURCES
 
 find_package(LibUSB)
 
-# JpegPkg name to differ from shipped with CMake
-find_package(JpegPkg QUIET)
-if(JPEG_FOUND)
-  message(STATUS "Building libuvc with JPEG support.")
-  set(LIBUVC_HAS_JPEG TRUE)
-  list(APPEND SOURCES src/frame-mjpeg.c)
+if(USE_JPEG_TURBO)
+    set(CMAKE_PREFIX_PATH /opt/homebrew/opt/jpeg-turbo)
+    find_package(PkgConfig REQUIRED)
+    pkg_search_module(TURBOJPEG REQUIRED libturbojpeg)
+    if(TURBOJPEG_FOUND)
+      message(STATUS "Building libuvc with JPEG-TURBO support.")
+      message("TURBOJPEG_INCLUDE_DIRS: " ${TURBOJPEG_INCLUDE_DIRS})
+      message("TURBOJPEG_LIBDIR: " ${TURBOJPEG_LIBDIR})
+      message("TURBOJPEG_LIBRARIES: " ${TURBOJPEG_LIBRARIES})
+      
+      set(LIBUVC_HAS_JPEG TRUE)
+      list(APPEND SOURCES src/frame-mjpeg.c)
+    else()
+      message(WARNING "JPEG-TURBO not found. libuvc will not support JPEG decoding.")
+    endif()
 else()
-  message(WARNING "JPEG not found. libuvc will not support JPEG decoding.")
+    # JpegPkg name to differ from shipped with CMake
+    find_package(JpegPkg QUIET)
+    if(JPEG_FOUND)
+      message(STATUS "Building libuvc with JPEG support.")
+      set(LIBUVC_HAS_JPEG TRUE)
+      list(APPEND SOURCES src/frame-mjpeg.c)
+    else()
+      message(WARNING "JPEG not found. libuvc will not support JPEG decoding.")
+    endif()
 endif()
+
+
 
 if(${CMAKE_BUILD_TARGET} MATCHES "Shared")
   set(BUILD_UVC_SHARED TRUE)
@@ -111,11 +131,17 @@ foreach(target_name IN LISTS UVC_TARGETS)
     # libusb-1.0 used internally so we link to it privately.
     PRIVATE LibUSB::LibUSB
   )
-  if(JPEG_FOUND)
-    target_link_libraries(${target_name}
-      PRIVATE JPEG::JPEG
-    )
+  
+  if(USE_JPEG_TURBO)
+        target_include_directories(${target_name} PUBLIC ${TURBOJPEG_INCLUDE_DIRS})
+        target_link_libraries(${target_name} PRIVATE ${TURBOJPEG_LINK_LIBRARIES})
+  elseif(JPEG_FOUND)
+        target_link_libraries(${target_name}
+            PRIVATE JPEG::JPEG
+        )
+  else()
   endif()
+
   set_target_properties(${target_name} PROPERTIES
       PUBLIC_HEADER "include/libuvc/libuvc.h;${CMAKE_CURRENT_BINARY_DIR}/include/libuvc/libuvc_config.h"
   )
@@ -191,10 +217,16 @@ install(FILES
   DESTINATION ${CMAKE_INSTALL_CMAKEDIR}
 )
 
-if(JPEG_FOUND)
-  # If we have used JPEG library we need to 
-  # add linker flag for it in config file for pkgconfig
-  set(PKGCONFIG_JPEG_LDFLAG "-ljpeg")
+if(USE_JPEG_TURBO)
+    # If we have used JPEG library we need to 
+    # add linker flag for it in config file for pkgconfig
+    message(${TURBOJPEG_LINK_LIBRARIES})
+    set(PKGCONFIG_JPEG_LDFLAG ${TURBOJPEG_LINK_LIBRARIES})
+elseif(JPEG_FOUND)
+    # If we have used JPEG library we need to 
+    # add linker flag for it in config file for pkgconfig
+    set(PKGCONFIG_JPEG_LDFLAG "-ljpeg")
+else()
 endif()
 
 configure_file(libuvc.pc.in
